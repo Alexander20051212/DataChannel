@@ -1,0 +1,5 @@
+Name,CanId,SizeBits,PeriodMs,DeadlineMs
+EngineSpeed,0x080,128,10,10
+VehicleSpeed,0x100,120,20,20
+CoolantTemp,0x180,112,50,50
+DoorStatus,0x300,104,100,100
