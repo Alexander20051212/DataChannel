@@ -24,16 +24,46 @@ public class CanCalculationService
     }
 
     /// <summary>
-    /// Рассчитывает полную задержку доставки сообщения.
+    /// Рассчитывает полную задержку доставки без учета арбитража.
     /// </summary>
     public double DeliveryDelay(CanMessage message, CanChannel channel)
     {
-        // Получаем время непосредственной передачи кадра.
+        // Рассчитываем время непосредственной передачи кадра.
         double transmissionTime = TransmissionTime(message, channel);
 
         // Учитываем передачу, распространение сигнала и обработку.
         return transmissionTime +
                channel.PropagationDelayMs +
                channel.ProcessingDelayMs;
+    }
+
+    /// <summary>
+    /// Рассчитывает время ожидания сообщения из-за более высоких приоритетов.
+    /// </summary>
+    public double ArbitrationWaitTime(
+        CanMessage message,
+        List<CanMessage> allMessages,
+        CanChannel channel)
+    {
+        // Находим сообщения с меньшим CAN ID, имеющие более высокий приоритет.
+        return allMessages
+            .Where(otherMessage => otherMessage.CanId < message.CanId)
+            .Sum(otherMessage => TransmissionTime(otherMessage, channel));
+    }
+
+    /// <summary>
+    /// Рассчитывает задержку доставки с учетом приоритетного арбитража.
+    /// </summary>
+    public double ArbitrationDeliveryDelay(
+        CanMessage message,
+        List<CanMessage> allMessages,
+        CanChannel channel)
+    {
+        // Определяем время ожидания освобождения CAN-шины.
+        double waitingTime = ArbitrationWaitTime(
+            message, allMessages, channel);
+
+        // Добавляем время ожидания к обычной задержке доставки.
+        return waitingTime + DeliveryDelay(message, channel);
     }
 }

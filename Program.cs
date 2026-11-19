@@ -25,10 +25,15 @@ internal class Program
 
         try
         {
-            // Загружаем параметры CAN-шины и сообщения.
+            // Загружаем параметры CAN-шины и список сообщений.
             CanChannel channel = csvService.LoadChannel(channelPath);
             List<CanMessage> messages =
                 csvService.LoadMessages(messagesPath);
+
+            // Сортируем сообщения по приоритету CAN ID.
+            List<CanMessage> sortedMessages = messages
+                .OrderBy(message => message.CanId)
+                .ToList();
 
             Console.WriteLine("==============================================");
             Console.WriteLine("          CAN DATA CHANNEL ANALYZER");
@@ -43,32 +48,40 @@ internal class Program
             Console.WriteLine(
                 $"Задержка обработки: {channel.ProcessingDelayMs:F3} мс");
 
-            Console.WriteLine("\nРЕЗУЛЬТАТЫ РАСЧЕТА ВРЕМЕННЫХ ХАРАКТЕРИСТИК");
-            Console.WriteLine("---------------------------------------------------------------");
+            Console.WriteLine("\nРЕЗУЛЬТАТЫ ПРИОРИТЕТНОГО АРБИТРАЖА");
+            Console.WriteLine("--------------------------------------------------------------------------");
 
             Console.WriteLine(
-                $"{"Сообщение",-18} {"CAN ID",-9} {"Передача, мс",-14} {"Доставка, мс"}");
+                $"{"Сообщение",-17} {"CAN ID",-9} {"Ожидание",-12} {"Передача",-12} {"Доставка",-12}");
 
             Console.WriteLine(
-                "---------------------------------------------------------------");
+                "--------------------------------------------------------------------------");
 
-            foreach (CanMessage message in messages)
+            foreach (CanMessage message in sortedMessages)
             {
-                // Рассчитываем время передачи и полную задержку доставки.
+                // Рассчитываем время ожидания из-за более приоритетных сообщений.
+                double waitingTime =
+                    calculationService.ArbitrationWaitTime(
+                        message, sortedMessages, channel);
+
+                // Рассчитываем время передачи текущего сообщения.
                 double transmissionTime =
                     calculationService.TransmissionTime(message, channel);
 
+                // Рассчитываем полную задержку с учетом арбитража.
                 double deliveryDelay =
-                    calculationService.DeliveryDelay(message, channel);
+                    calculationService.ArbitrationDeliveryDelay(
+                        message, sortedMessages, channel);
 
                 Console.WriteLine(
-                    $"{message.Name,-18} " +
+                    $"{message.Name,-17} " +
                     $"0x{message.CanId:X3}   " +
-                    $"{transmissionTime,-14:F3} " +
+                    $"{waitingTime,-12:F3} " +
+                    $"{transmissionTime,-12:F3} " +
                     $"{deliveryDelay:F3}");
             }
 
-            Console.WriteLine("\nРасчеты успешно завершены.");
+            Console.WriteLine("\nРасчет приоритетного арбитража завершен.");
         }
         catch (Exception ex)
         {
