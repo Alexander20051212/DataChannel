@@ -35,12 +35,15 @@ internal class Program
                 .OrderBy(message => message.CanId)
                 .ToList();
 
-            Console.WriteLine("==============================================");
-            Console.WriteLine("          CAN DATA CHANNEL ANALYZER");
-            Console.WriteLine("==============================================");
+            // Сохраняем рассчитанные задержки доставки.
+            var deliveryDelays = new List<double>();
+
+            Console.WriteLine("==============================================================");
+            Console.WriteLine("                  CAN DATA CHANNEL ANALYZER");
+            Console.WriteLine("==============================================================");
 
             Console.WriteLine("\nПАРАМЕТРЫ CAN-ШИНЫ");
-            Console.WriteLine("----------------------------------------------");
+            Console.WriteLine("--------------------------------------------------------------");
             Console.WriteLine(
                 $"Скорость передачи: {channel.SpeedBitsPerSecond / 1000} кбит/с");
             Console.WriteLine(
@@ -48,14 +51,14 @@ internal class Program
             Console.WriteLine(
                 $"Задержка обработки: {channel.ProcessingDelayMs:F3} мс");
 
-            Console.WriteLine("\nРЕЗУЛЬТАТЫ ПРИОРИТЕТНОГО АРБИТРАЖА");
-            Console.WriteLine("--------------------------------------------------------------------------");
+            Console.WriteLine("\nРЕЗУЛЬТАТЫ РАСЧЕТА И АРБИТРАЖА");
+            Console.WriteLine("--------------------------------------------------------------------------------");
 
             Console.WriteLine(
-                $"{"Сообщение",-17} {"CAN ID",-9} {"Ожидание",-12} {"Передача",-12} {"Доставка",-12}");
+                $"{"Сообщение",-17} {"CAN ID",-9} {"Ожидание",-11} {"Передача",-11} {"Доставка",-11} {"Дедлайн",-10} {"Результат"}");
 
             Console.WriteLine(
-                "--------------------------------------------------------------------------");
+                "--------------------------------------------------------------------------------");
 
             foreach (CanMessage message in sortedMessages)
             {
@@ -64,24 +67,69 @@ internal class Program
                     calculationService.ArbitrationWaitTime(
                         message, sortedMessages, channel);
 
-                // Рассчитываем время передачи текущего сообщения.
+                // Рассчитываем время передачи сообщения.
                 double transmissionTime =
                     calculationService.TransmissionTime(message, channel);
 
-                // Рассчитываем полную задержку с учетом арбитража.
+                // Рассчитываем полную задержку доставки.
                 double deliveryDelay =
                     calculationService.ArbitrationDeliveryDelay(
                         message, sortedMessages, channel);
 
+                // Сохраняем задержку для последующего расчета джиттера.
+                deliveryDelays.Add(deliveryDelay);
+
+                // Проверяем соблюдение временного ограничения.
+                bool meetsDeadline =
+                    calculationService.MeetsDeadline(
+                        message, deliveryDelay);
+
+                string result = meetsDeadline
+                    ? "Выполнен"
+                    : "Нарушен";
+
                 Console.WriteLine(
                     $"{message.Name,-17} " +
                     $"0x{message.CanId:X3}   " +
-                    $"{waitingTime,-12:F3} " +
-                    $"{transmissionTime,-12:F3} " +
-                    $"{deliveryDelay:F3}");
+                    $"{waitingTime,-11:F3} " +
+                    $"{transmissionTime,-11:F3} " +
+                    $"{deliveryDelay,-11:F3} " +
+                    $"{message.DeadlineMs,-10:F1} " +
+                    $"{result}");
             }
 
-            Console.WriteLine("\nРасчет приоритетного арбитража завершен.");
+            // Рассчитываем джиттер всех сообщений.
+            double jitter =
+                calculationService.CalculateJitter(deliveryDelays);
+
+            Console.WriteLine("\nАНАЛИЗ ДЖИТТЕРА");
+            Console.WriteLine("--------------------------------------------------------------");
+
+            Console.WriteLine(
+                $"Минимальная задержка: {deliveryDelays.Min():F3} мс");
+
+            Console.WriteLine(
+                $"Максимальная задержка: {deliveryDelays.Max():F3} мс");
+
+            Console.WriteLine(
+                $"Джиттер: {jitter:F3} мс");
+
+            // Подсчитываем количество выполненных и нарушенных дедлайнов.
+            int successfulMessages = sortedMessages.Count(message =>
+            {
+                int index = sortedMessages.IndexOf(message);
+                return calculationService.MeetsDeadline(
+                    message, deliveryDelays[index]);
+            });
+
+            int failedMessages = sortedMessages.Count - successfulMessages;
+
+            Console.WriteLine("\nИТОГ ПРОВЕРКИ ДЕДЛАЙНОВ");
+            Console.WriteLine("--------------------------------------------------------------");
+            Console.WriteLine($"Успешно доставлено: {successfulMessages}");
+            Console.WriteLine($"Нарушено дедлайнов: {failedMessages}");
+
+            Console.WriteLine("\nАнализ временных характеристик завершен.");
         }
         catch (Exception ex)
         {

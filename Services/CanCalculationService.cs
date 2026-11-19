@@ -38,14 +38,14 @@ public class CanCalculationService
     }
 
     /// <summary>
-    /// Рассчитывает время ожидания сообщения из-за более высоких приоритетов.
+    /// Рассчитывает время ожидания из-за более высоких приоритетов.
     /// </summary>
     public double ArbitrationWaitTime(
         CanMessage message,
         List<CanMessage> allMessages,
         CanChannel channel)
     {
-        // Находим сообщения с меньшим CAN ID, имеющие более высокий приоритет.
+        // Находим сообщения с меньшим CAN ID.
         return allMessages
             .Where(otherMessage => otherMessage.CanId < message.CanId)
             .Sum(otherMessage => TransmissionTime(otherMessage, channel));
@@ -65,5 +65,31 @@ public class CanCalculationService
 
         // Добавляем время ожидания к обычной задержке доставки.
         return waitingTime + DeliveryDelay(message, channel);
+    }
+
+    /// <summary>
+    /// Рассчитывает джиттер как разницу между максимальной
+    /// и минимальной задержкой доставки.
+    /// </summary>
+    public double CalculateJitter(List<double> delays)
+    {
+        if (delays == null || delays.Count < 2)
+            return 0;
+
+        // Находим максимальную и минимальную задержки.
+        double maxDelay = delays.Max();
+        double minDelay = delays.Min();
+
+        // Возвращаем разброс значений задержки.
+        return maxDelay - minDelay;
+    }
+
+    /// <summary>
+    /// Проверяет, укладывается ли сообщение в установленный дедлайн.
+    /// </summary>
+    public bool MeetsDeadline(CanMessage message, double deliveryDelay)
+    {
+        // Сравниваем фактическое время доставки с допустимым.
+        return deliveryDelay <= message.DeadlineMs;
     }
 }
