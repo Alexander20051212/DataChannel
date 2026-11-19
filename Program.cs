@@ -19,55 +19,60 @@ internal class Program
         string messagesPath = Path.Combine(
             dataDirectory, "messages.csv");
 
-        // Создаем сервис загрузки данных.
+        // Создаем сервисы загрузки и расчета данных.
         var csvService = new CsvDataService();
+        var calculationService = new CanCalculationService();
 
         try
         {
-            // Загружаем параметры CAN-шины.
+            // Загружаем параметры CAN-шины и сообщения.
             CanChannel channel = csvService.LoadChannel(channelPath);
-
-            // Загружаем список сообщений.
             List<CanMessage> messages =
                 csvService.LoadMessages(messagesPath);
 
-            Console.WriteLine("========================================");
-            Console.WriteLine("     CAN DATA CHANNEL ANALYZER");
-            Console.WriteLine("========================================");
+            Console.WriteLine("==============================================");
+            Console.WriteLine("          CAN DATA CHANNEL ANALYZER");
+            Console.WriteLine("==============================================");
 
             Console.WriteLine("\nПАРАМЕТРЫ CAN-ШИНЫ");
-            Console.WriteLine("----------------------------------------");
+            Console.WriteLine("----------------------------------------------");
             Console.WriteLine(
                 $"Скорость передачи: {channel.SpeedBitsPerSecond / 1000} кбит/с");
             Console.WriteLine(
-                $"Задержка распространения: {channel.PropagationDelayMs} мс");
+                $"Задержка распространения: {channel.PropagationDelayMs:F3} мс");
             Console.WriteLine(
-                $"Задержка обработки: {channel.ProcessingDelayMs} мс");
+                $"Задержка обработки: {channel.ProcessingDelayMs:F3} мс");
 
-            Console.WriteLine("\nЗАГРУЖЕННЫЕ CAN-СООБЩЕНИЯ");
-            Console.WriteLine("----------------------------------------");
+            Console.WriteLine("\nРЕЗУЛЬТАТЫ РАСЧЕТА ВРЕМЕННЫХ ХАРАКТЕРИСТИК");
+            Console.WriteLine("---------------------------------------------------------------");
 
             Console.WriteLine(
-                $"{"Название",-18} {"CAN ID",-10} {"Размер, бит",-13} {"Период, мс",-12} {"Дедлайн, мс"}");
+                $"{"Сообщение",-18} {"CAN ID",-9} {"Передача, мс",-14} {"Доставка, мс"}");
 
             Console.WriteLine(
                 "---------------------------------------------------------------");
 
             foreach (CanMessage message in messages)
             {
+                // Рассчитываем время передачи и полную задержку доставки.
+                double transmissionTime =
+                    calculationService.TransmissionTime(message, channel);
+
+                double deliveryDelay =
+                    calculationService.DeliveryDelay(message, channel);
+
                 Console.WriteLine(
                     $"{message.Name,-18} " +
                     $"0x{message.CanId:X3}   " +
-                    $"{message.SizeBits,-13} " +
-                    $"{message.PeriodMs,-12} " +
-                    $"{message.DeadlineMs}");
+                    $"{transmissionTime,-14:F3} " +
+                    $"{deliveryDelay:F3}");
             }
 
-            Console.WriteLine("\nЗагрузка данных завершена успешно.");
+            Console.WriteLine("\nРасчеты успешно завершены.");
         }
         catch (Exception ex)
         {
-            Console.WriteLine("\nОШИБКА ЗАГРУЗКИ ДАННЫХ:");
+            Console.WriteLine("\nОШИБКА:");
             Console.WriteLine(ex.Message);
         }
 
